@@ -10,14 +10,15 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Transaction_Log_Reader.Clases;
 
 namespace Transaction_Log_Reader {
     struct Columna_Informacion {
-        public string column_name;
-        public int type_id;
-        public int offset;
-        public int capacity;
-        public string value;
+        public string column_name { get; set; }
+        public int type_id { get; set; }
+        public int offset { get; set; }
+        public int capacity { get; set; }
+        public string value { get; set; }
     }
     public partial class ShowTransactions:Form {
         string database_name;
@@ -30,7 +31,6 @@ namespace Transaction_Log_Reader {
         }
 
         private void comboBox2_SelectedIndexChanged(object sender, EventArgs e) {
-            columnas = new List<Columna_Informacion>();
             string sql = @"SELECT a.[Transaction ID], a.operation as Operacion,a.AllocUnitName as Tabla,b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
                         WHERE b.[Transaction ID] = a.[Transaction ID] and a.AllocUnitName  like '%dbo." + comboBox2.Text + "%' and (a.operation = 'LOP_MODIFY_ROW' or a.operation='LOP_INSERT_ROWS' or a.operation ='LOP_DELETE_ROWS')";
             try {
@@ -65,7 +65,7 @@ namespace Transaction_Log_Reader {
             }
         }
         private byte [] getRowLogContents(string id_transaction, string operacion) {
-            string sql = @"select [RowLog Contents 0] from fn_dblog(null,null) where allocunitname  like '%dbo." + comboBox2.Text + "%' and [Transaction ID] ='" + id_transaction + "' and operation='" + operacion + "'";
+            string sql = @"select [RowLog Contents 0] from fn_dblog(null,null) where allocunitname like '%dbo." + comboBox2.Text + "%' and [Transaction ID] ='" + id_transaction + "' and operation='" + operacion + "'";
             SqlCommand command;
             SqlDataReader dataReader;
             try {
@@ -74,14 +74,15 @@ namespace Transaction_Log_Reader {
                 dataReader = command.ExecuteReader();
                 while (dataReader.Read()) {
                     var data = dataReader [0];
+                    dataReader.Close();
+                    command.Dispose();
+                    cnn.Close();
                     //byte [] b3 = new byte [4];
                     //Buffer.BlockCopy((Array)data, 4, b3, 0, 4);
                     //int i = BitConverter.ToInt32(b3, 0);
                     return (byte [])data;
                 }
-                dataReader.Close();
-                command.Dispose();
-                cnn.Close();
+                
             } catch (Exception ex) {
                 MessageBox.Show("Can not open connection ! ");
             }
@@ -89,6 +90,7 @@ namespace Transaction_Log_Reader {
         }
 
         private void getColumns() {
+            columnas = new List<Columna_Informacion>();
             string sql = @"SELECT c.name AS column_name, max_inrow_length,pc.system_type_id, leaf_offset FROM sys.system_internals_partition_columns pc JOIN sys.partitions p ON p.partition_id = pc.partition_id JOIN sys.columns c ON column_id = partition_column_id
                          AND c.object_id = p.object_id
                          WHERE p.object_id=object_id('" + comboBox2.Text + "')  order by leaf_offset asc;";
@@ -130,15 +132,17 @@ namespace Transaction_Log_Reader {
             var variable_length = columnas.Where(x => x.offset < 0).ToList();
             byte [] rowLogContent = getRowLogContents(id_transaction, operacion);
             int fixed_length_totalbytes = 0;
-            fixed_length.ForEach(x => fixed_length_totalbytes += x.capacity);
             int posicion = 0;
             int posReferencia = 0;
-            for (int i = 0; i < fixed_length.Count; i++) {
+            fixed_length.ForEach(x => fixed_length_totalbytes += x.capacity);
+
+            ConverterDataTypes cs = new ConverterDataTypes();
+            for (int i = 0; i < fixed_length.Count; i++) {//Asignamiento metadata a campos de tamano fijo
                 string data_hexa = "";
                 byte [] data = new byte [fixed_length [i].capacity];
                 for (int j = fixed_length [i].offset, k = 0; j < fixed_length [i].capacity + fixed_length [i].offset; j++, k++) {
                     data [k] = rowLogContent [j];
-                    data_hexa += data [k].ToString();
+                    data_hexa += ConvertToHexa(data [k].ToString());
                 }
                 posicion = fixed_length [i].capacity + fixed_length [i].offset + 5;
                 Columna_Informacion ms = fixed_length [i];
@@ -146,22 +150,23 @@ namespace Transaction_Log_Reader {
                 fixed_length [i] = ms;
                 posReferencia = posicion;
             }
-            
-            for (int i = 0; i < variable_length.Count; i++) {
+
+            for (int i = 0; i < variable_length.Count; i++) {//Asignar el offset a los campos de tamano variable ya que por defecto son nums negativos
                 int posData = rowLogContent [posicion];
                 Columna_Informacion ms = variable_length [i];
                 ms.offset = posData;
                 variable_length [i] = ms;
                 posicion += 2;
             }
+
             int varStart = posReferencia + (variable_length.Count * 2);
-            for (int i = 0; i < variable_length.Count; i++) {
+            for (int i = 0; i < variable_length.Count; i++) {//Asignamiento metadata a campos de tamano variable
                 string data_hexa = "";
                 int counter = 0;
                 byte [] data = new byte [variable_length [i].capacity];
-                for (int j = varStart; j <  variable_length[i].offset; j++) {
+                for (int j = varStart; j < variable_length [i].offset; j++) {
                     data [counter] = rowLogContent [j];
-                    data_hexa += data [counter].ToString();
+                    data_hexa += ConvertToHexa(data [counter].ToString());
                     counter++;
                 }
                 Columna_Informacion ms = variable_length [i];
@@ -169,8 +174,22 @@ namespace Transaction_Log_Reader {
                 variable_length [i] = ms;
                 varStart = variable_length [i].offset;
             }
+            columnas.Clear();
+            columnas.AddRange(fixed_length);
+            columnas.AddRange(variable_length);
+
+            for (int i = 0; i < columnas.Count; i++) {
+                Columna_Informacion ms = columnas [i];
+                ms.value = Convert.ToString( cs.ConvertHexa((DataTypes)columnas[i].type_id, columnas[i].value)); 
+                columnas [i] = ms;
+            } 
+            dataGridView1.DataSource = columnas;
+        }
+        public string ConvertToHexa(string _decimal) {
+            return Int32.Parse(_decimal).ToString("X2");
         }
     }
+
 }
 
 //         for (int i = 0; i<variable_length.Count; i++) {

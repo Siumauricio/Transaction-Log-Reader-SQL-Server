@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,8 +8,16 @@ using System.Threading.Tasks;
 
 namespace Transaction_Log_Reader.Clases {
     class ConvertFunctions {
-        public static char hexToChar(string hexa) {
-            return (char)Int16.Parse(hexa, NumberStyles.AllowHexSpecifier);
+        public static string hexToChar(string hexa) {
+            if (hexa == null || (hexa.Length & 1) == 1) {
+                throw new ArgumentException();
+            }
+            var sb = new StringBuilder();
+            for (var i = 0; i < hexa.Length; i += 2) {
+                var hexChar = hexa.Substring(i, 2);
+                sb.Append((char)Convert.ToByte(hexChar, 16));
+            }
+            return sb.ToString();
         }
         public static string hexToVarchar(string hexa) {
             if (hexa == null || (hexa.Length & 1) == 1) {
@@ -35,7 +44,7 @@ namespace Transaction_Log_Reader.Clases {
             dt = dt.AddMinutes(time);
             return dt;
         }
-        public static long hexToInt(string hexa) {
+        public static int hexToInt(string hexa) {
             int value = int.Parse(hexa, System.Globalization.NumberStyles.HexNumber);
             byte [] bytes = BitConverter.GetBytes(value);
             Array.Reverse(bytes);
@@ -108,7 +117,7 @@ namespace Transaction_Log_Reader.Clases {
             return string.Join(String.Empty, hex.Select(c => Convert.ToString(Convert.ToUInt32(c.ToString(), 16), 2).PadLeft(4, '0')));
         }
         public static string LittleEndian(string num) {
-            long number = Convert.ToInt64(num, 16);
+            int number = Convert.ToInt32(num, 16);
             byte [] bytes = BitConverter.GetBytes(number);
             string retval = "";
             foreach (byte b in bytes)

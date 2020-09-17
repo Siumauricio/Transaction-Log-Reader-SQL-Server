@@ -123,3 +123,11 @@ C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin
 C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\zh-Hant\Microsoft.Data.SqlClient.resources.dll
 C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\obj\Debug\Transaction_Log_Reader.csproj.CopyComplete
 C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\obj\Debug\Transaction_Log_Reader.ShowTransactions.resources
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Buffers.dll
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Memory.dll
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Numerics.Vectors.dll
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Runtime.CompilerServices.Unsafe.dll
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Buffers.xml
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Memory.xml
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Numerics.Vectors.xml
+C:\Users\Mauricio\source\repos\Transaction_Log_Reader\Transaction_Log_Reader\bin\Debug\System.Runtime.CompilerServices.Unsafe.xml
