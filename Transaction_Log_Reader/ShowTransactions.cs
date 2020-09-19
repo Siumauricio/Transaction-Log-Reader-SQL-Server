@@ -28,8 +28,23 @@ namespace Transaction_Log_Reader {
         public byte [] rowLogContent { get; set; }
         public bool knowOffset { get; set; }
     }
+
+    struct Data_Update {
+        public byte [] hex_Old { get; set; }
+        public byte [] hex_New { get; set; }
+        public short offset { get; set; }
+        public short size_modified { get; set; }
+        public string transaction_id { get; set; }
+        //  public byte [] rowLogContent { get; set; }
+        //  public bool knowOffset { get; set; }
+    }
+    struct Data_Insert {
+        public byte [] RowLogContent { get; set; }
+    }
     public partial class ShowTransactions:Form {
         string database_name;
+        List<Data_Insert> dt_Insert;
+        List<Data_Update> dt_Update;
         List<Columna_Informacion> columnas;
         List<Columna_Update > rowLog;
         SqlConnection cnn;
@@ -40,7 +55,7 @@ namespace Transaction_Log_Reader {
         }
 
         private void comboBox2_SelectedIndexChanged(object sender, EventArgs e) {
-            string sql = @"SELECT a.[Transaction ID], a.operation as Operacion,a.AllocUnitName as Tabla,b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
+            string sql = @"SELECT a.[Transaction ID], a.operation as Operacion,a.AllocUnitName as Tabla,a.[Slot ID],b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
                         WHERE b.[Transaction ID] = a.[Transaction ID] and a.AllocUnitName  like '%dbo." + comboBox2.Text + "%' and (a.operation = 'LOP_MODIFY_ROW' or a.operation='LOP_INSERT_ROWS' or a.operation ='LOP_DELETE_ROWS')";
             try {
                 cnn.Open();
@@ -74,7 +89,6 @@ namespace Transaction_Log_Reader {
             }
         }
         private byte [] getRowLogContents(string id_transaction, string operacion) {
-
             string sql = @"select [RowLog Contents 0] from fn_dblog(null,null) where allocunitname like '%dbo." + comboBox2.Text + "%' and [Transaction ID] ='" + id_transaction + "' and operation='" + operacion + "'";
             SqlCommand command;
             SqlDataReader dataReader;
@@ -168,6 +182,7 @@ namespace Transaction_Log_Reader {
                 getColumns();
                 string id_transaction = row.Cells [0].Value.ToString();
                 string operacion = row.Cells [1].Value.ToString();
+                int slot = int.Parse(row.Cells [3].Value.ToString());
 
                 if (operacion == "LOP_MODIFY_ROW") {
                     getRowLogContents1(id_transaction);
@@ -182,25 +197,10 @@ namespace Transaction_Log_Reader {
                         }
                     }
                     if (!rowLog[0].knowOffset) {//Campos de tamano variable
-                        Columna_Update cu = rowLog [0];
-                        List<byte> cn = new List<byte>(cu.rowLogContent);
-                        List<byte> cn2 = new List<byte>();
-                        List<byte> cn3 = new List<byte>();
-                        int contador = 0;
-                        for (int i = 0; i < cu.offset+4; i++) {
-                            cn2.Add(cn [i]);
-                        }
-                        for (int i = 4; i < cu.hex_New.Length; i++) {
-                            cn3.Add(cu.hex_New [i]);
-                        }
-                            cn2.AddRange(cn3);
-                        //int valor = (cu.rowLogContent.Length - cu.hex_Old.Length);
-                        //byte [] bytes = new byte [cu.rowLogContent.Length];
-
-                        //bytes = cu.rowLogContent;
-                        //Array.Resize<byte>(ref bytes, valor + cu.hex_New.Length);
-                        //Array.Copy(cu.hex_New, 0, cn, cu.offset, cu.hex_New.Length);
-                       getDataColumns(cn2.ToArray());
+                        getRowInsert(comboBox2.Text, slot);
+                        getRowsUpdate(comboBox2.Text, slot);
+                       byte []arr= getInsertsContent(id_transaction);
+                        getDataColumns(arr);
                     }
                 } else {
                     byte [] rowLogContent = getRowLogContents(id_transaction, operacion);
@@ -269,6 +269,118 @@ namespace Transaction_Log_Reader {
         }
         public string ConvertToHexa(string _decimal) {
             return Int32.Parse(_decimal).ToString("X2");
+        }
+
+        public byte[] getInsertsContent(string transaccion_id) {
+            for (int i = 0; i < dt_Update.Count; i++) {
+                if (getT(dt_Update [i].offset, dt_Insert [0].RowLogContent)) {
+                    byte [] valores = dt_Insert [0].RowLogContent;
+                    int nuevoTam = dt_Insert [0].RowLogContent.Length - dt_Update [i].hex_Old.Length;
+                    Array.Resize<byte>(ref valores, nuevoTam + dt_Update [i].hex_New.Length);
+                    Array.Copy(dt_Update [i].hex_New, 0, valores, dt_Update [i].offset, dt_Update [i].hex_New.Length);
+                    Data_Insert ms = dt_Insert [0];
+                    ms.RowLogContent = valores;
+                    dt_Insert [0] = ms;
+                    Console.WriteLine("Puede reemplazar todos los bytes restantes!");
+                } else {
+                    getValue(dt_Insert [0].RowLogContent, dt_Update [i].offset, dt_Update [i].hex_Old.Length, dt_Update [i].hex_New);
+                    Console.WriteLine("Necesita hacer desplazamiento");
+
+                }
+                if (transaccion_id == dt_Update [i].transaction_id) {
+                    return dt_Insert[0].RowLogContent;
+                }
+            }
+            return new byte [0];
+        }
+        public void getValue(byte [] rowLogContent, int offset, int tamano, byte [] newValue) {
+            List<byte> p = new List<byte>();
+            List<byte> p2 = new List<byte>();
+            for (int i = 0; i < offset; i++) {
+                p.Add(rowLogContent [i]);
+            }
+
+            for (int i = offset + tamano; i < rowLogContent.Length; i++) {
+                p2.Add(rowLogContent [i]);
+            }
+            p.AddRange(newValue);
+            p.AddRange(p2);
+            Data_Insert ms = dt_Insert [0];
+            ms.RowLogContent = p.ToArray();
+            dt_Insert [0] = ms;
+        }
+        public void getRowInsert(string nombre_tabla, int slot_Id) {
+            dt_Insert   = new List<Data_Insert>();
+            string sql = @"SELECT [RowLog Contents 0] from fn_dblog(null,null) where operation = 'LOP_INSERT_ROWS' and [Slot ID]='" + slot_Id + "' AND AllocUnitName = 'dbo." + nombre_tabla + "'";
+            SqlCommand command;
+            SqlDataReader dataReader;
+            try {
+                cnn.Open();
+                command = new SqlCommand(sql, cnn);
+                dataReader = command.ExecuteReader();
+                while (dataReader.Read()) {
+                    var data = new Data_Insert {
+                        RowLogContent = (byte [])dataReader [0]
+                    };
+                    dt_Insert.Add(data);
+                }
+                // ht_principal.Add("Updates", dt_Update);
+                dataReader.Close();
+                command.Dispose();
+                cnn.Close();
+            } catch (Exception ex) {
+            }
+        }
+
+        public void getRowsUpdate(string nombre_tabla, int slot_Id) {
+            dt_Update = new List<Data_Update>();
+            string sql = @"SELECT a.[RowLog Contents 0], a.[RowLog Contents 1],a.[Offset in Row],a.[Modify Size],a.[Transaction ID],b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
+                        WHERE b.[Transaction ID] = a.[Transaction ID] and a.[Slot ID]='" + slot_Id + "' and a.AllocUnitName = 'dbo." + nombre_tabla + "' and (a.operation = 'LOP_MODIFY_ROW'  ) order by b.[Begin Time] asc";
+            SqlCommand command;
+            SqlDataReader dataReader;
+            try {
+                cnn.Open();
+                command = new SqlCommand(sql, cnn);
+                dataReader = command.ExecuteReader();
+                while (dataReader.Read()) {
+                    var data = new Data_Update {
+                        hex_Old = (byte [])dataReader [0],
+                        hex_New = (byte [])dataReader [1],
+                        offset = (short)dataReader [2],
+                        size_modified = (short)dataReader [3],
+                        transaction_id = dataReader [4].ToString()
+                    };
+                    dt_Update.Add(data);
+                }
+                // ht_principal.Add("Insert", dt_Insert);
+                dataReader.Close();
+                command.Dispose();
+                cnn.Close();
+            } catch (Exception ex) {
+            }
+
+        }
+
+        public bool getT(int offset, byte [] rowLogContent) {
+            List<byte> canValues = new List<byte>();
+            for (int i = offset; i < rowLogContent.Length; i++) {
+                if (rowLogContent [i].ToString() != "0" && rowLogContent [i + 1].ToString() != "0") {
+                    Console.WriteLine("Limite alcanzado");
+                    break;
+                } else if (rowLogContent [i].ToString() == "0") {
+                    Console.WriteLine("Saltando Valor");
+
+                } else {
+                    Console.WriteLine(rowLogContent [i]);
+                    canValues.Add(rowLogContent [i]);
+                }
+            }
+            int canTamanoVar = columnas.Where(x => x.offset < 1).ToList().Count;
+            int valor = canTamanoVar - canValues.Count;
+            if ((canTamanoVar - valor) == 1) {
+                return true;
+            }
+            return false;
         }
     }
 
