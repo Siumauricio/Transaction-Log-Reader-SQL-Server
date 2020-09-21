@@ -147,20 +147,3 @@ namespace Transaction_Log_Reader.Clases {
         }
     }
 }
-//static void Main(string [] args) {
-//    Console.WriteLine(hexToChar("43"));
-//    Console.WriteLine(hexToVarchar("4d6175726963696f"));
-//    Console.WriteLine(hexToInt("01000000"));
-//    Console.WriteLine(hexToBigint("01000000"));
-//    Console.WriteLine(hexTotinyint("FF"));
-//    Console.WriteLine(hexToMoney("08AA980000000000"));
-//    Console.WriteLine(hexToFloat4Bytes("00207A44"));
-//    Console.WriteLine(hexToFloat8Bytes("0000000000448F40"));
-//    Console.WriteLine(hexToReal("00207A44"));
-//    Console.WriteLine(hexToBinary("00207A4400207A4FFFFF"));
-//    Console.WriteLine(hexToBit("00"));
-//    Console.WriteLine(hexToDatetime(0x000094F0, 0x00EDA008));
-//    Console.WriteLine(hexToSmallDatetime(0x94F0, 0x0361));
-//    Console.WriteLine(HexToDecimal("00001275"));
-//    Console.WriteLine(HexToNumeric("00001275"));
-//}
