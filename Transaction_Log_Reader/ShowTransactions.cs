@@ -46,7 +46,7 @@ namespace Transaction_Log_Reader {
         List<Data_Insert> dt_Insert;
         List<Data_Update> dt_Update;
         List<Columna_Informacion> columnas;
-        List<Columna_Update > rowLog;
+        List<Columna_Update> rowLog;
         SqlConnection cnn;
         public ShowTransactions(string _database_name, SqlConnection _cnn) {
             InitializeComponent();
@@ -56,7 +56,7 @@ namespace Transaction_Log_Reader {
 
         private void comboBox2_SelectedIndexChanged(object sender, EventArgs e) {
             string sql = @"SELECT a.[Transaction ID], a.operation as Operacion,a.AllocUnitName as Tabla,a.[Slot ID],b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
-                        WHERE b.[Transaction ID] = a.[Transaction ID] and a.AllocUnitName  like '%dbo." + comboBox2.Text + "%' and (a.operation = 'LOP_MODIFY_ROW' or a.operation='LOP_INSERT_ROWS' or a.operation ='LOP_DELETE_ROWS')";
+                        WHERE b.[Transaction ID] = a.[Transaction ID] and a.AllocUnitName='dbo." + comboBox2.Text + "' and a.RowFlags != 0  and (a.operation = 'LOP_MODIFY_ROW' or a.operation='LOP_INSERT_ROWS' or a.operation ='LOP_DELETE_ROWS')";
             try {
                 cnn.Open();
                 SqlDataAdapter dataAdapter = new SqlDataAdapter(sql, cnn);
@@ -88,8 +88,8 @@ namespace Transaction_Log_Reader {
                 MessageBox.Show("Can not open connection ! ");
             }
         }
-        private byte [] getRowLogContents(string id_transaction, string operacion) {
-            string sql = @"select [RowLog Contents 0] from fn_dblog(null,null) where allocunitname like '%dbo." + comboBox2.Text + "%' and [Transaction ID] ='" + id_transaction + "' and operation='" + operacion + "'";
+        private byte [] getRowLogContents(string id_transaction, string operacion,int slot_id) {
+            string sql = @"select [RowLog Contents 0] from fn_dblog(null,null) where allocunitname like '%dbo." + comboBox2.Text + "%' and [Transaction ID] ='" + id_transaction + "' and operation='" + operacion + "' and [Slot ID]='"+slot_id+"'";
             SqlCommand command;
             SqlDataReader dataReader;
             try {
@@ -106,7 +106,7 @@ namespace Transaction_Log_Reader {
                     //int i = BitConverter.ToInt32(b3, 0);
                     return (byte [])data;
                 }
-                
+
             } catch (Exception ex) {
                 MessageBox.Show("Can not open connection ! ");
             }
@@ -116,7 +116,7 @@ namespace Transaction_Log_Reader {
         private void getRowLogContents1(string id_transaction) {
             rowLog = new List<Columna_Update>();
             string sql = @"SELECT a.[RowLog Contents 0] as Antiguo,a.[RowLog Contents 1] as Nuevo,a.[Offset in Row],a.[Modify Size],b.[RowLog Contents 0], a.operation as Operacion,a.AllocUnitName,b.operation as Tabla from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_INSERT_ROWS') b
-                        WHERE b.[Slot ID] = a.[Slot ID] and a.AllocUnitName = 'dbo."+comboBox2.Text+"' and a.operation = 'LOP_MODIFY_ROW' and a.[Transaction ID] ='"+ id_transaction + "'";
+                        WHERE b.[Slot ID] = a.[Slot ID] and a.AllocUnitName = 'dbo." + comboBox2.Text + "' and a.operation = 'LOP_MODIFY_ROW' and a.[Transaction ID] ='" + id_transaction + "'";
             SqlCommand command;
             SqlDataReader dataReader;
             try {
@@ -140,7 +140,7 @@ namespace Transaction_Log_Reader {
                 }
 
             } catch (Exception ex) {
-                MessageBox.Show("Can not open connection ! "+ex.Message);
+                MessageBox.Show("Can not open connection ! " + ex.Message);
             }
         }
 
@@ -185,30 +185,30 @@ namespace Transaction_Log_Reader {
                 int slot = int.Parse(row.Cells [3].Value.ToString());
 
                 if (operacion == "LOP_MODIFY_ROW") {
-                    getRowLogContents1(id_transaction);
-                    for (int i = 0; i < columnas.Count; i++) {//Para campos de tamano fijo
-                        if (columnas [i].offset == rowLog [0].offset && !rowLog[0].knowOffset) {
-                            Columna_Update cu = rowLog [0];
-                            cu.knowOffset = true;
-                            rowLog [0] = cu;
-                            Array.Copy(cu.hex_New, 0, cu.rowLogContent,cu.offset,cu.size_modified );
-                            getDataColumns(cu.rowLogContent);
-                            break;
-                        }
-                    }
-                    if (!rowLog[0].knowOffset) {//Campos de tamano variable
-                        getRowInsert(comboBox2.Text, slot);
-                        getRowsUpdate(comboBox2.Text, slot);
-                       byte []arr= getInsertsContent(id_transaction);
-                        getDataColumns(arr);
-                    }
+                    // getRowLogContents1(id_transaction);
+                    //for (int i = 0; i < columnas.Count; i++) {//Para campos de tamano fijo
+                    //    if (columnas [i].offset == rowLog [0].offset && !rowLog [0].knowOffset) {
+                    //        Columna_Update cu = rowLog [0];
+                    //        cu.knowOffset = true;
+                    //        rowLog [0] = cu;
+                    //        Array.Copy(cu.hex_New, 0, cu.rowLogContent, cu.offset, cu.size_modified);
+                    //        getDataColumns(cu.rowLogContent);
+                    //        break;
+                    //    }
+                    //}
+                     //if (!rowLog[0].knowOffset) {//Campos de tamano variable
+                    getRowInsert(comboBox2.Text, slot);
+                    getRowsUpdate(comboBox2.Text, slot);
+                    byte [] arr = getInsertsContent(id_transaction);
+                    getDataColumns(arr);
+                      //}
                 } else {
-                    byte [] rowLogContent = getRowLogContents(id_transaction, operacion);
+                    byte [] rowLogContent = getRowLogContents(id_transaction, operacion,slot);
                     getDataColumns(rowLogContent);
                 }
             }
         }
-        private void getDataColumns(byte []rowLogContent) {
+        private void getDataColumns(byte [] rowLogContent) {
 
             var fixed_length = columnas.Where(x => x.offset >= 0).OrderBy(x => x.offset).ToList();
             var variable_length = columnas.Where(x => x.offset < 0).ToList();
@@ -226,13 +226,20 @@ namespace Transaction_Log_Reader {
                     data [k] = rowLogContent [j];
                     data_hexa += ConvertToHexa(data [k].ToString());
                 }
-                posicion = fixed_length [i].capacity + fixed_length [i].offset + 5;
+                posicion = fixed_length [i].capacity + fixed_length [i].offset;
                 Columna_Informacion ms = fixed_length [i];
                 ms.value = data_hexa;
                 fixed_length [i] = ms;
                 posReferencia = posicion;
             }
-
+            posicion++;
+            for (int i = posicion; i < rowLogContent.Length; i++) {
+                if (rowLogContent[i].ToString() == variable_length.Count.ToString()) {
+                    posicion = i + 2;
+                    break;
+                }
+            }
+            variable_length.Reverse();
             for (int i = 0; i < variable_length.Count; i++) {//Asignar el offset a los campos de tamano variable ya que por defecto son nums negativos
                 int posData = rowLogContent [posicion];
                 Columna_Informacion ms = variable_length [i];
@@ -241,7 +248,7 @@ namespace Transaction_Log_Reader {
                 posicion += 2;
             }
 
-            int varStart = posReferencia + (variable_length.Count * 2);
+            int varStart = posicion;
             for (int i = 0; i < variable_length.Count; i++) {//Asignamiento metadata a campos de tamano variable
                 string data_hexa = "";
                 int counter = 0;
@@ -262,16 +269,16 @@ namespace Transaction_Log_Reader {
 
             for (int i = 0; i < columnas.Count; i++) {
                 Columna_Informacion ms = columnas [i];
-                ms.value = Convert.ToString( cs.ConvertHexa((DataTypes)columnas[i].type_id, columnas[i].value)); 
+                ms.value = Convert.ToString(cs.ConvertHexa((DataTypes)columnas [i].type_id, columnas [i].value));
                 columnas [i] = ms;
-            } 
+            }
             dataGridView1.DataSource = columnas;
         }
         public string ConvertToHexa(string _decimal) {
             return Int32.Parse(_decimal).ToString("X2");
         }
 
-        public byte[] getInsertsContent(string transaccion_id) {
+        public byte [] getInsertsContent(string transaccion_id) {
             for (int i = 0; i < dt_Update.Count; i++) {
                 if (getT(dt_Update [i].offset, dt_Insert [0].RowLogContent)) {
                     byte [] valores = dt_Insert [0].RowLogContent;
@@ -288,7 +295,7 @@ namespace Transaction_Log_Reader {
 
                 }
                 if (transaccion_id == dt_Update [i].transaction_id) {
-                    return dt_Insert[0].RowLogContent;
+                    return dt_Insert [0].RowLogContent;
                 }
             }
             return new byte [0];
@@ -310,7 +317,7 @@ namespace Transaction_Log_Reader {
             dt_Insert [0] = ms;
         }
         public void getRowInsert(string nombre_tabla, int slot_Id) {
-            dt_Insert   = new List<Data_Insert>();
+            dt_Insert = new List<Data_Insert>();
             string sql = @"SELECT [RowLog Contents 0] from fn_dblog(null,null) where operation = 'LOP_INSERT_ROWS' and [Slot ID]='" + slot_Id + "' AND AllocUnitName = 'dbo." + nombre_tabla + "'";
             SqlCommand command;
             SqlDataReader dataReader;
@@ -333,6 +340,8 @@ namespace Transaction_Log_Reader {
         }
 
         public void getRowsUpdate(string nombre_tabla, int slot_Id) {
+            int totalLength = 0;
+            columnas.ForEach(x => totalLength += x.capacity);
             dt_Update = new List<Data_Update>();
             string sql = @"SELECT a.[RowLog Contents 0], a.[RowLog Contents 1],a.[Offset in Row],a.[Modify Size],a.[Transaction ID],b.[Begin Time] as Hora from fn_dblog(null,null) a, (SELECT  * from fn_dblog(null,null) b  where b.operation= 'LOP_BEGIN_XACT') b
                         WHERE b.[Transaction ID] = a.[Transaction ID] and a.[Slot ID]='" + slot_Id + "' and a.AllocUnitName = 'dbo." + nombre_tabla + "' and (a.operation = 'LOP_MODIFY_ROW'  ) order by b.[Begin Time] asc";
@@ -350,7 +359,11 @@ namespace Transaction_Log_Reader {
                         size_modified = (short)dataReader [3],
                         transaction_id = dataReader [4].ToString()
                     };
-                    dt_Update.Add(data);
+                    if (data.offset<totalLength) {
+                        dt_Update.Add(data);
+
+                    }
+                   
                 }
                 // ht_principal.Add("Insert", dt_Insert);
                 dataReader.Close();

@@ -10,29 +10,35 @@ namespace Transaction_Log_Reader.Clases {
     class ConverterDataTypes {
         public dynamic ConvertHexa(DataTypes dt, string hexa) {
             switch (dt) {
-                case DataTypes.Char:
+                case DataTypes.Char://
                     return ConvertFunctions.hexToChar(hexa);
-                case DataTypes.VarChar:
+                case DataTypes.VarChar://
                     return ConvertFunctions.hexToVarchar(hexa);
-                case DataTypes.DateTime:
-                    return ConvertFunctions.hexToChar(hexa);
-                case DataTypes.SmallDateTime:
-                    return ConvertFunctions.hexToChar(hexa);
-                case DataTypes.Int:
+                case DataTypes.DateTime://
+                    return ConvertFunctions.hexToDatetime(hexa);
+                case DataTypes.SmallDateTime://
+                    return ConvertFunctions.hexToSmallDatetime(hexa);
+                case DataTypes.Int://
                     return ConvertFunctions.hexToInt(hexa);
-                case DataTypes.BigInt:
+                case DataTypes.BigInt://
                     return ConvertFunctions.hexToBigint(hexa);
-                case DataTypes.TinyInt:
+                case DataTypes.TinyInt://
                     return ConvertFunctions.hexTotinyint(hexa);
-                case DataTypes.Decimal:
+                case DataTypes.Decimal://
                     return ConvertFunctions.HexToDecimal(hexa);
-                case DataTypes.Money:
+                case DataTypes.Money://
                     return ConvertFunctions.hexToMoney(hexa);
-                case DataTypes.Float:
-                    return ConvertFunctions.hexToFloat4Bytes(hexa);
-                case DataTypes.Real:
+                case DataTypes.Float://
+                    if (hexa.Length == 16 ) {
+                        return ConvertFunctions.hexToFloat8Bytes(hexa);
+                    } else {
+                        return ConvertFunctions.hexToFloat4Bytes(hexa);
+                    }
+                case DataTypes.Real://
                     return ConvertFunctions.hexToReal(hexa);
-                case DataTypes.Numeric:
+                case DataTypes.Bit:
+                    return ConvertFunctions.hexToBit(hexa);
+                case DataTypes.Numeric://
                     return ConvertFunctions.HexToNumeric(hexa);
                 case DataTypes.Binary:
                     return ConvertFunctions.hexToBinary(hexa);
